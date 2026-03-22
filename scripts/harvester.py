@@ -80,6 +80,7 @@ def main():
     total_queries = 0
     total_blocks = 0
     global_domain_blocks = {}
+    global_domain_allows = {}
     csv_rows = []
 
     # === データのパースと集計 ===
@@ -98,6 +99,8 @@ def main():
         if is_block:
             total_blocks += count
             global_domain_blocks[domain] = global_domain_blocks.get(domain, 0) + count
+        else:
+            global_domain_allows[domain] = global_domain_allows.get(domain, 0) + count
 
         # JST時間の計算と、グラフ用の時間別集計
         jst_dt_display = "Unknown"
@@ -189,6 +192,19 @@ def main():
             report.append(f"| {count:,} | `{domain}` |")
     else:
         report.append("| 0 | No blocked domains |")
+
+    # 4. 全体の上位許可クエリ
+    report.append("\n")
+    report.append("#### ✅ Top 10 Allowed Queries (Global)")
+    report.append("| Count | Query |")
+    report.append("| :--- | :--- |")
+
+    top_global_allowed = sorted(global_domain_allows.items(), key=lambda x: x[1], reverse=True)[:10]
+    if top_global_allowed:
+        for domain, count in top_global_allowed:
+            report.append(f"| {count:,} | `{domain}` |")
+    else:
+        report.append("| 0 | No allowed queries |")
 
     write_summary("\n".join(report))
     
