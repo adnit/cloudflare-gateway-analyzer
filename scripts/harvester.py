@@ -65,9 +65,7 @@ def main():
         logs = []
 
     if not logs:
-        write_summary("### 🛡️ Cloudflare Gateway Daily Insights\n\nNo queries found in the last 24 hours.")
-        print("✅ No data found.")
-        return
+        print("ℹ️ No queries found in the last 24 hours. Generating an empty summary report.")
 
     # === 集計用の初期化 ===
     now_jst = now_utc + timedelta(hours=9)
@@ -145,6 +143,10 @@ def main():
         ""
     ]
 
+    if total_queries == 0:
+        report.append("> No queries found in the last 24 hours.")
+        report.append("")
+
     # 1. グラフセクション (Mermaid.js xychart-beta)
     x_axis_str = "[" + ", ".join(f'"{h}"' for h in hours_list) + "]"
     allow_data_str = "[" + ", ".join(str(hourly_stats[h]['allow']) for h in hours_list) + "]"
@@ -168,17 +170,20 @@ def main():
     
     # 総クエリ数が多い順にソートしてテーブル化
     sorted_locs = sorted(location_stats.items(), key=lambda x: x[1]['total'], reverse=True)
-    for loc, stats in sorted_locs:
-        l_total = stats['total']
-        l_block = stats['block']
-        l_rate = (l_block / l_total * 100) if l_total > 0 else 0
-        
-        top_domain = "None"
-        if stats['domains']:
-            top_domain = sorted(stats['domains'].items(), key=lambda x: x[1], reverse=True)[0][0]
-            top_domain = f"`{top_domain}`"
+    if sorted_locs:
+        for loc, stats in sorted_locs:
+            l_total = stats['total']
+            l_block = stats['block']
+            l_rate = (l_block / l_total * 100) if l_total > 0 else 0
             
-        report.append(f"| **{loc}** | {l_total:,} | {l_block:,} | {l_rate:.1f}% | {top_domain} |")
+            top_domain = "None"
+            if stats['domains']:
+                top_domain = sorted(stats['domains'].items(), key=lambda x: x[1], reverse=True)[0][0]
+                top_domain = f"`{top_domain}`"
+                
+            report.append(f"| **{loc}** | {l_total:,} | {l_block:,} | {l_rate:.1f}% | {top_domain} |")
+    else:
+        report.append("| N/A | 0 | 0 | 0.0% | None |")
     report.append("\n")
 
     # 3. 全体の上位ブロックドメイン
