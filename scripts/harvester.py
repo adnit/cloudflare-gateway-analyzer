@@ -5,6 +5,26 @@ from urllib.error import URLError, HTTPError
 from datetime import datetime, timedelta
 import csv
 
+
+def is_block_decision(decision):
+    """Normalize Cloudflare decision values across int/string formats."""
+    block_codes = {2, 3, 6, 9}
+
+    if isinstance(decision, (int, float)):
+        return int(decision) in block_codes
+
+    normalized = str(decision).strip().lower()
+    if normalized.isdigit():
+        return int(normalized) in block_codes
+
+    # Fallback for enum-like string values.
+    return any(keyword in normalized for keyword in ["block", "deny", "safe_search"])
+
+
+def escape_markdown_cell(value):
+    """Escape markdown table delimiters to avoid broken rows."""
+    return str(value).replace("|", "\\|").replace("`", "\\`")
+
 def main():
     api_token = os.environ.get('CF_API_TOKEN')
     account_id = os.environ.get('CF_ACCOUNT_ID')
@@ -84,13 +104,13 @@ def main():
     # === データのパースと集計 ===
     for item in logs:
         utc_dt_str = item['dimensions'].get('datetime', '')
-        count = item['count']
-        domain = item['dimensions']['queryName']
+        count = int(item.get('count', 0))
+        domain = item['dimensions'].get('queryName', 'Unknown')
         loc = item['dimensions'].get('locationName', 'Unknown')
-        decision = item['dimensions']['resolverDecision']
+        decision = item['dimensions'].get('resolverDecision', '')
         
-        # 判定 (2, 3, 6, 9 がブロックポリシー・セーフサーチ等による遮断)
-        is_block = decision in [2, 3, 6, 9]
+        # 判定 (Cloudflareの値フォーマット差分に耐える)
+        is_block = is_block_decision(decision)
         decision_str = "Block" if is_block else "Allow"
 
         total_queries += count
@@ -179,9 +199,9 @@ def main():
             top_domain = "None"
             if stats['domains']:
                 top_domain = sorted(stats['domains'].items(), key=lambda x: x[1], reverse=True)[0][0]
-                top_domain = f"`{top_domain}`"
+                top_domain = f"`{escape_markdown_cell(top_domain)}`"
                 
-            report.append(f"| **{loc}** | {l_total:,} | {l_block:,} | {l_rate:.1f}% | {top_domain} |")
+            report.append(f"| **{escape_markdown_cell(loc)}** | {l_total:,} | {l_block:,} | {l_rate:.1f}% | {top_domain} |")
     else:
         report.append("| N/A | 0 | 0 | 0.0% | None |")
     report.append("\n")
@@ -194,20 +214,20 @@ def main():
     top_global_blocked = sorted(global_domain_blocks.items(), key=lambda x: x[1], reverse=True)[:10]
     if top_global_blocked:
         for domain, count in top_global_blocked:
-            report.append(f"| {count:,} | `{domain}` |")
+            report.append(f"| {count:,} | `{escape_markdown_cell(domain)}` |")
     else:
         report.append("| 0 | No blocked domains |")
 
     # 4. 全体の上位許可クエリ
     report.append("\n")
-    report.append("#### ✅ Top 10 Allowed Queries (Global)")
-    report.append("| Count | Query |")
+    report.append("#### ✅ Top 10 Allowed Domains (Global)")
+    report.append("| Count | Domain |")
     report.append("| :--- | :--- |")
 
     top_global_allowed = sorted(global_domain_allows.items(), key=lambda x: x[1], reverse=True)[:10]
     if top_global_allowed:
         for domain, count in top_global_allowed:
-            report.append(f"| {count:,} | `{domain}` |")
+            report.append(f"| {count:,} | `{escape_markdown_cell(domain)}` |")
     else:
         report.append("| 0 | No allowed queries |")
 
